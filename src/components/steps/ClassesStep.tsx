@@ -1,11 +1,14 @@
+import { useState } from 'react';
 import { useApp } from '../../state/AppContext';
 import type { ClassItem } from '../../types';
+import { DAY_ABBR } from '../../types';
 import SyllabusUploader from '../SyllabusUploader';
 import BlocksEditor from '../BlocksEditor';
+import NumberInput from '../NumberInput';
 import type { ParsedSyllabus } from '../../lib/syllabusParser';
 import { classColor } from '../../lib/colors';
 import { derivedStudyHours, effectiveHoursPerUnit } from '../../lib/studyHours';
-import { fmtHours } from '../../lib/time';
+import { fmtHours, fmtTime } from '../../lib/time';
 
 let n = 0;
 const newId = () => `class-${Date.now().toString(36)}-${n++}`;
@@ -93,6 +96,23 @@ export default function ClassesStep() {
   );
 }
 
+/** Group meetings that share a time into a readable line, e.g. "Mon, Wed, Fri · 10:00–10:50 AM". */
+function summarizeMeetings(item: ClassItem): string[] {
+  const groups = new Map<string, { start: number; end: number; days: number[] }>();
+  for (const m of item.meetings) {
+    const key = `${m.start}-${m.end}`;
+    if (!groups.has(key)) groups.set(key, { start: m.start, end: m.end, days: [] });
+    groups.get(key)!.days.push(m.day);
+  }
+  return [...groups.values()].map(
+    (g) =>
+      `${g.days
+        .sort((a, b) => a - b)
+        .map((d) => DAY_ABBR[d])
+        .join(', ')} · ${fmtTime(g.start)}–${fmtTime(g.end)}`,
+  );
+}
+
 function ClassCard({
   item,
   rate,
@@ -107,11 +127,16 @@ function ClassCard({
   recalc: (units: number) => number;
 }) {
   const set = (patch: Partial<ClassItem>) => onChange({ ...item, ...patch });
+  const hasMeetings = item.meetings.length > 0;
 
-  const needsAttention = !item.name || item.meetings.length === 0;
+  // The meeting-times section bypasses itself when the syllabus already supplied
+  // them — collapsed to a confirmation, expandable to edit. If none were found,
+  // it opens for input.
+  const [editingTimes, setEditingTimes] = useState(!hasMeetings);
 
   return (
     <div className="card p-5" style={{ borderLeft: `3px solid ${item.color}` }}>
+      {/* Name + color + remove */}
       <div className="flex items-start gap-3">
         <input
           type="color"
@@ -120,86 +145,68 @@ function ClassCard({
           className="h-9 w-9 rounded-lg bg-transparent border border-[var(--color-border)] cursor-pointer shrink-0"
           aria-label="Class color"
         />
-        <div className="flex-1 grid sm:grid-cols-[1fr_120px_120px] gap-3">
-          <div>
-            <label className="label">Course name</label>
-            <input
-              className="input"
-              placeholder="e.g. Intro to Programming"
-              value={item.name}
-              onChange={(e) => set({ name: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Code</label>
-            <input
-              className="input"
-              placeholder="CS 101"
-              value={item.code ?? ''}
-              onChange={(e) => set({ code: e.target.value })}
-            />
-          </div>
-          <div>
-            <label className="label">Units</label>
-            <input
-              type="number"
-              min={0.5}
-              max={12}
-              step={0.5}
-              className="input"
-              value={item.units}
-              onChange={(e) => {
-                const units = Number(e.target.value);
-                // Derived hours follow units unless locked by the syllabus.
-                set(
-                  item.studyHoursAuto
-                    ? { units }
-                    : { units, studyHoursPerWeek: recalc(units) },
-                );
-              }}
-            />
-          </div>
+        <div className="flex-1">
+          <label className="label">Course name</label>
+          <input
+            className="input"
+            placeholder="e.g. Intro to Programming"
+            value={item.name}
+            onChange={(e) => set({ name: e.target.value })}
+          />
         </div>
         <button
           onClick={onRemove}
-          className="text-[var(--color-muted)] hover:text-[var(--color-ink)] text-xl leading-none px-1 shrink-0"
+          className="text-[var(--color-muted)] hover:text-[var(--color-ink)] text-xl leading-none px-1 shrink-0 mt-6"
           aria-label="Remove class"
         >
           ×
         </button>
       </div>
 
-      <div className="grid sm:grid-cols-[1fr_auto] gap-4 mt-4 items-end">
+      {/* Code · Units · Study hours */}
+      <div className="grid sm:grid-cols-3 gap-3 mt-4">
         <div>
-          <label className="label">Meeting times</label>
-          <BlocksEditor blocks={item.meetings} onChange={(meetings) => set({ meetings })} />
+          <label className="label">Code</label>
+          <input
+            className="input"
+            placeholder="CS 101"
+            value={item.code ?? ''}
+            onChange={(e) => set({ code: e.target.value })}
+          />
         </div>
-        <div className="sm:w-[200px]">
-          <label className="label">Study hours / week</label>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              min={0}
-              max={40}
-              step={0.5}
-              className="input"
-              value={item.studyHoursPerWeek}
-              onChange={(e) =>
-                set({ studyHoursPerWeek: Number(e.target.value), studyHoursAuto: false })
-              }
-            />
-          </div>
+        <div>
+          <label className="label">Units</label>
+          <NumberInput
+            value={item.units}
+            min={0.5}
+            max={12}
+            ariaLabel="Units"
+            onChange={(units) =>
+              set(item.studyHoursAuto ? { units } : { units, studyHoursPerWeek: recalc(units) })
+            }
+          />
+        </div>
+        <div>
+          <label className="label">Study / week</label>
+          <NumberInput
+            value={item.studyHoursPerWeek}
+            min={0}
+            max={40}
+            suffix="hrs"
+            ariaLabel="Study hours per week"
+            onChange={(v) => set({ studyHoursPerWeek: v, studyHoursAuto: false })}
+          />
           <p className="text-xs text-[var(--color-muted)] mt-1.5">
             {item.studyHoursAuto ? (
-              <span className="text-[var(--color-ink)] font-medium">From syllabus workload</span>
+              <span className="text-[var(--color-ink)] font-medium">From syllabus</span>
             ) : (
               <>
-                {item.units} units × {rate} hr ={' '}
+                {item.units} × {rate}h ·{' '}
                 <button
                   className="text-[var(--color-ink)] underline underline-offset-2 hover:opacity-70"
                   onClick={() => set({ studyHoursPerWeek: recalc(item.units) })}
                 >
-                  reset to {recalc(item.units)}h
+                  reset
                 </button>
               </>
             )}
@@ -207,14 +214,48 @@ function ClassCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 mt-3">
-        {item.source && <span className="chip">{item.source}</span>}
-        {needsAttention && (
-          <span className="chip border-[var(--color-ink)] text-[var(--color-ink)]">
-            Check the highlighted fields
-          </span>
+      {/* Meeting times — bypassed (collapsed) when supplied by the syllabus */}
+      <div className="mt-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg)] p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <span className="label !mb-0">Meeting times</span>
+            {hasMeetings && !editingTimes && (
+              <span className="chip border-[var(--color-border-strong)]">Detected</span>
+            )}
+            {!hasMeetings && (
+              <span className="chip border-[#dc2626] text-[#dc2626]">Not found — add</span>
+            )}
+          </div>
+          {hasMeetings && (
+            <button
+              onClick={() => setEditingTimes((v) => !v)}
+              className="text-sm text-[var(--color-ink)] underline underline-offset-2 hover:opacity-70"
+            >
+              {editingTimes ? 'Done' : 'Edit'}
+            </button>
+          )}
+        </div>
+
+        {hasMeetings && !editingTimes ? (
+          <ul className="mt-2 space-y-1">
+            {summarizeMeetings(item).map((line, i) => (
+              <li key={i} className="text-sm text-[var(--color-ink-2)] tnum">
+                {line}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="mt-3">
+            <BlocksEditor blocks={item.meetings} onChange={(meetings) => set({ meetings })} />
+          </div>
         )}
       </div>
+
+      {item.source && (
+        <div className="mt-3">
+          <span className="chip">{item.source}</span>
+        </div>
+      )}
     </div>
   );
 }

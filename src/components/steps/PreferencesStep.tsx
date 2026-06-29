@@ -1,13 +1,14 @@
+import type { ReactNode } from 'react';
 import { useApp } from '../../state/AppContext';
 import type { DayIndex, StudyWindow } from '../../types';
 import DayPicker from '../DayPicker';
 import { fromTimeInput, toTimeInput } from '../../lib/time';
 
 const WINDOWS: { id: StudyWindow; label: string; hint: string }[] = [
-  { id: 'any', label: 'Anytime', hint: 'No preference' },
-  { id: 'morning', label: 'Mornings', hint: '6am–12pm' },
-  { id: 'afternoon', label: 'Afternoons', hint: '12–5pm' },
-  { id: 'evening', label: 'Evenings', hint: '5–10pm' },
+  { id: 'any', label: 'Any', hint: 'No preference' },
+  { id: 'morning', label: 'Morning', hint: '6am–12pm' },
+  { id: 'afternoon', label: 'Afternoon', hint: '12–5pm' },
+  { id: 'evening', label: 'Evening', hint: '5–10pm' },
 ];
 
 export default function PreferencesStep() {
@@ -16,19 +17,17 @@ export default function PreferencesStep() {
   const set = (patch: Partial<typeof p>) => dispatch({ type: 'setPrefs', patch });
 
   return (
-    <div className="animate-in flex flex-col gap-6">
+    <div className="animate-in flex flex-col gap-6 max-w-3xl">
       <header>
         <h2 className="text-2xl font-bold">How do you want your week to feel?</h2>
-        <p className="text-[var(--color-muted)] mt-1 max-w-2xl">
-          These preferences shape where study blocks land and how much breathing room you keep.
+        <p className="text-[var(--color-muted)] mt-1">
+          These shape where study blocks land and how much breathing room you keep.
         </p>
       </header>
 
-      <div className="grid lg:grid-cols-2 gap-5">
-        {/* Free time */}
-        <div className="card p-5">
-          <label className="label">Free time you want each week</label>
-          <div className="flex items-center gap-4">
+      <Section title="Your week">
+        <Row label="Free time to protect" hint="Kept unscheduled before study fills in">
+          <div className="flex items-center gap-3">
             <input
               type="range"
               min={0}
@@ -36,146 +35,169 @@ export default function PreferencesStep() {
               step={1}
               value={p.freeTimePerWeek}
               onChange={(e) => set({ freeTimePerWeek: Number(e.target.value) })}
-              className="flex-1 accent-[var(--color-brand)]"
+              className="w-40 accent-[var(--color-ink)]"
             />
-            <span className="text-2xl font-bold text-[var(--color-ink)] w-20 text-right tnum">
+            <span className="tnum font-semibold w-12 text-right text-[var(--color-ink)]">
               {p.freeTimePerWeek}h
             </span>
           </div>
-          <p className="text-sm text-[var(--color-muted)] mt-2">
-            CourseNest keeps at least this much unscheduled leisure time before filling slots with
-            study.
-          </p>
-        </div>
+        </Row>
 
-        {/* Sleep window */}
-        <div className="card p-5">
-          <label className="label">Your day runs from…</label>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <span className="text-xs text-[var(--color-muted)]">Wake</span>
-              <input
-                type="time"
-                className="input mt-1"
-                value={toTimeInput(p.wake)}
-                onChange={(e) => set({ wake: fromTimeInput(e.target.value) })}
-              />
-            </div>
-            <div className="flex-1">
-              <span className="text-xs text-[var(--color-muted)]">Wind down</span>
-              <input
-                type="time"
-                className="input mt-1"
-                value={toTimeInput(p.sleep)}
-                onChange={(e) => set({ sleep: fromTimeInput(e.target.value) })}
-              />
-            </div>
-          </div>
-          <label className="flex items-center gap-2 mt-4 cursor-pointer select-none text-sm">
+        <Row label="Day runs from" hint="Nothing is scheduled outside these hours">
+          <div className="flex items-center gap-2">
             <input
-              type="checkbox"
-              checked={p.includeMeals}
-              onChange={(e) => set({ includeMeals: e.target.checked })}
+              type="time"
+              className="input !w-auto !py-1.5"
+              value={toTimeInput(p.wake)}
+              onChange={(e) => e.target.value && set({ wake: fromTimeInput(e.target.value) })}
             />
-            Reserve time for lunch &amp; dinner
-          </label>
-        </div>
+            <span className="text-sm text-[var(--color-muted)]">to</span>
+            <input
+              type="time"
+              className="input !w-auto !py-1.5"
+              value={toTimeInput(p.sleep)}
+              onChange={(e) => e.target.value && set({ sleep: fromTimeInput(e.target.value) })}
+            />
+          </div>
+        </Row>
 
-        {/* Study window */}
-        <div className="card p-5">
-          <label className="label">Preferred time to study</label>
-          <div className="grid grid-cols-2 gap-2">
+        <Row label="Reserve meal times" hint="Holds lunch & dinner open">
+          <Toggle checked={p.includeMeals} onChange={(v) => set({ includeMeals: v })} />
+        </Row>
+      </Section>
+
+      <Section title="Studying">
+        <Row label="Preferred time of day">
+          <div className="inline-flex rounded-lg border border-[var(--color-border-strong)] overflow-hidden">
             {WINDOWS.map((w) => {
               const active = p.studyWindow === w.id;
               return (
                 <button
                   key={w.id}
+                  title={w.hint}
                   onClick={() => set({ studyWindow: w.id })}
-                  className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                  className={`px-3 py-1.5 text-sm font-medium transition-colors border-r border-[var(--color-border-strong)] last:border-r-0 ${
                     active
-                      ? 'border-[var(--color-brand)] bg-[var(--color-brand)]/12'
-                      : 'border-[var(--color-border)] hover:bg-[var(--color-surface-2)]'
+                      ? 'bg-[var(--color-ink)] text-white'
+                      : 'bg-[var(--color-surface)] hover:bg-[var(--color-surface-2)]'
                   }`}
                 >
-                  <div className="font-semibold text-sm">{w.label}</div>
-                  <div className="text-xs text-[var(--color-muted)]">{w.hint}</div>
+                  {w.label}
                 </button>
               );
             })}
           </div>
-        </div>
+        </Row>
 
-        {/* Study shape */}
-        <div className="card p-5">
-          <label className="label">Study session shape</label>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <span className="text-xs text-[var(--color-muted)]">Longest block</span>
-              <select
-                className="select mt-1"
-                value={p.maxStudyBlock}
-                onChange={(e) => set({ maxStudyBlock: Number(e.target.value) })}
-              >
-                <option value={60}>1 hour</option>
-                <option value={90}>1.5 hours</option>
-                <option value={120}>2 hours</option>
-                <option value={180}>3 hours</option>
-              </select>
-            </div>
-            <div>
-              <span className="text-xs text-[var(--color-muted)]">Break between</span>
-              <select
-                className="select mt-1"
-                value={p.minBreak}
-                onChange={(e) => set({ minBreak: Number(e.target.value) })}
-              >
-                <option value={0}>None</option>
-                <option value={15}>15 min</option>
-                <option value={30}>30 min</option>
-                <option value={60}>1 hour</option>
-              </select>
-            </div>
+        <Row label="Session shape" hint="Block length and breaks between">
+          <div className="flex items-center gap-2">
+            <select
+              className="select !w-auto !py-1.5"
+              value={p.maxStudyBlock}
+              onChange={(e) => set({ maxStudyBlock: Number(e.target.value) })}
+            >
+              <option value={60}>Up to 1h</option>
+              <option value={90}>Up to 1.5h</option>
+              <option value={120}>Up to 2h</option>
+              <option value={180}>Up to 3h</option>
+            </select>
+            <select
+              className="select !w-auto !py-1.5"
+              value={p.minBreak}
+              onChange={(e) => set({ minBreak: Number(e.target.value) })}
+            >
+              <option value={0}>No break</option>
+              <option value={15}>15m break</option>
+              <option value={30}>30m break</option>
+              <option value={60}>1h break</option>
+            </select>
           </div>
-          <div className="mt-4">
-            <span className="text-xs text-[var(--color-muted)]">Days you'll study</span>
-            <div className="mt-1.5">
-              <DayPicker
-                value={p.studyDays}
-                onChange={(studyDays: DayIndex[]) => set({ studyDays })}
-              />
-            </div>
-          </div>
-        </div>
+        </Row>
 
-        {/* Term dates */}
-        <div className="card p-5 lg:col-span-2">
-          <label className="label">Term dates (used for the calendar export)</label>
-          <div className="flex flex-wrap items-center gap-4">
-            <div>
-              <span className="text-xs text-[var(--color-muted)]">First day</span>
-              <input
-                type="date"
-                className="input mt-1"
-                value={p.termStart}
-                onChange={(e) => set({ termStart: e.target.value })}
-              />
-            </div>
-            <div>
-              <span className="text-xs text-[var(--color-muted)]">Last day</span>
-              <input
-                type="date"
-                className="input mt-1"
-                value={p.termEnd}
-                onChange={(e) => set({ termEnd: e.target.value })}
-              />
-            </div>
-            <p className="text-sm text-[var(--color-muted)] flex-1 min-w-[14rem]">
-              Your weekly schedule repeats between these dates when added to Google or Apple
-              Calendar.
-            </p>
+        <Row label="Days you'll study">
+          <DayPicker
+            value={p.studyDays}
+            size="sm"
+            onChange={(studyDays: DayIndex[]) => set({ studyDays })}
+          />
+        </Row>
+      </Section>
+
+      <Section
+        title="Term dates"
+        subtitle="Your weekly plan repeats between these when added to a calendar."
+      >
+        <Row label="First & last day">
+          <div className="flex items-center gap-2">
+            <input
+              type="date"
+              className="input !w-auto !py-1.5"
+              value={p.termStart}
+              onChange={(e) => e.target.value && set({ termStart: e.target.value })}
+            />
+            <span className="text-sm text-[var(--color-muted)]">to</span>
+            <input
+              type="date"
+              className="input !w-auto !py-1.5"
+              value={p.termEnd}
+              onChange={(e) => e.target.value && set({ termEnd: e.target.value })}
+            />
           </div>
-        </div>
-      </div>
+        </Row>
+      </Section>
     </div>
+  );
+}
+
+function Section({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  return (
+    <section>
+      <div className="px-1 mb-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[var(--color-muted)]">
+          {title}
+        </h3>
+        {subtitle && <p className="text-xs text-[var(--color-muted)] mt-0.5">{subtitle}</p>}
+      </div>
+      <div className="card px-5">{children}</div>
+    </section>
+  );
+}
+
+function Row({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+  return (
+    <div className="grid sm:grid-cols-[1fr_auto] items-center gap-x-6 gap-y-2.5 py-4 border-b border-[var(--color-border)] last:border-0">
+      <div>
+        <div className="font-medium text-[15px] text-[var(--color-ink)]">{label}</div>
+        {hint && <div className="text-xs text-[var(--color-muted)] mt-0.5">{hint}</div>}
+      </div>
+      <div className="sm:justify-self-end">{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`relative h-6 w-10 rounded-full transition-colors ${
+        checked ? 'bg-[var(--color-ink)]' : 'bg-[var(--color-border-strong)]'
+      }`}
+    >
+      <span
+        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${
+          checked ? 'translate-x-[18px]' : 'translate-x-0.5'
+        }`}
+      />
+    </button>
   );
 }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../../state/AppContext';
 import { SCHOOLS, SCHOOL_SYSTEMS, getSchool } from '../../data/schools';
 import { effectiveHoursPerUnit } from '../../lib/studyHours';
+import NumberInput from '../NumberInput';
 
 export default function SchoolStep() {
   const { state, dispatch } = useApp();
@@ -122,16 +123,12 @@ export default function SchoolStep() {
           {useCustom && (
             <div className="mt-3">
               <label className="label">Hours per unit per week</label>
-              <input
-                type="number"
+              <NumberInput
+                value={state.customStudyHoursPerUnit ?? rate}
                 min={0.5}
                 max={6}
-                step={0.5}
-                className="input"
-                value={state.customStudyHoursPerUnit ?? rate}
-                onChange={(e) =>
-                  dispatch({ type: 'setCustomHours', value: Number(e.target.value) })
-                }
+                ariaLabel="Custom hours per unit per week"
+                onChange={(v) => dispatch({ type: 'setCustomHours', value: v })}
               />
             </div>
           )}

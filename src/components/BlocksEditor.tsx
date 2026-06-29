@@ -42,14 +42,14 @@ export default function BlocksEditor({ blocks, onChange, withLocation = true }: 
             type="time"
             className="input !w-auto !py-1.5"
             value={toTimeInput(b.start)}
-            onChange={(e) => update(i, { start: fromTimeInput(e.target.value) })}
+            onChange={(e) => e.target.value && update(i, { start: fromTimeInput(e.target.value) })}
           />
           <span className="text-[var(--color-muted)]">→</span>
           <input
             type="time"
             className="input !w-auto !py-1.5"
             value={toTimeInput(b.end)}
-            onChange={(e) => update(i, { end: fromTimeInput(e.target.value) })}
+            onChange={(e) => e.target.value && update(i, { end: fromTimeInput(e.target.value) })}
           />
           {withLocation && (
             <input

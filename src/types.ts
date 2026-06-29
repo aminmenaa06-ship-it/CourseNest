@@ -36,6 +36,15 @@ export interface School {
   note?: string;
 }
 
+/** Final-exam date/time, auto-pulled from the syllabus when present. */
+export interface FinalExamInfo {
+  /** ISO date 'YYYY-MM-DD'. */
+  date?: string;
+  /** Minutes from midnight. */
+  start?: number;
+  end?: number;
+}
+
 export interface ClassItem {
   id: string;
   name: string;
@@ -54,6 +63,8 @@ export interface ClassItem {
   color: string;
   /** Free-text notes / source filename. */
   source?: string;
+  /** Final-exam date/time if found in the syllabus. */
+  finalExam?: FinalExamInfo;
 }
 
 export type CommitmentType =

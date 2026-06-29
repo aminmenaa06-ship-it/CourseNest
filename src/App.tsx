@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useApp } from './state/AppContext';
 import Stepper from './components/Stepper';
 import Landing from './components/Landing';
@@ -6,6 +7,7 @@ import ClassesStep from './components/steps/ClassesStep';
 import CommitmentsStep from './components/steps/CommitmentsStep';
 import PreferencesStep from './components/steps/PreferencesStep';
 import ScheduleStep from './components/steps/ScheduleStep';
+import FinalsBuilder from './components/FinalsBuilder';
 import { ArrowLeft, ArrowRight, RefreshIcon } from './components/Icons';
 import { usePlan } from './features/PlanContext';
 import ProBadge from './features/ProBadge';
@@ -20,7 +22,8 @@ const STEPS = [
 
 export default function App() {
   const { state, dispatch, resetAll } = useApp();
-  const { isPro, promptUpgrade, downgrade } = usePlan();
+  const { isPro, promptUpgrade, downgrade, can } = usePlan();
+  const [finalsOpen, setFinalsOpen] = useState(false);
   const step = state.step;
 
   const go = (i: number) =>
@@ -77,13 +80,13 @@ export default function App() {
               </button>
             )}
             <button
-              onClick={() => {
-                dispatch({ type: 'loadDemo' });
-                go(4);
-              }}
+              onClick={() =>
+                can('finalsBuilder') ? setFinalsOpen(true) : promptUpgrade('finalsBuilder')
+              }
               className="btn btn-subtle !py-1.5 text-sm"
+              title="Build a finals study plan"
             >
-              Load example
+              Finals
             </button>
             <button
               onClick={() => {
@@ -134,6 +137,8 @@ export default function App() {
           )}
         </div>
       </footer>
+
+      {finalsOpen && <FinalsBuilder onClose={() => setFinalsOpen(false)} />}
     </div>
   );
 }

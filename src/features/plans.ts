@@ -5,7 +5,11 @@
 
 export type Plan = 'free' | 'pro';
 
-export type FeatureId = 'calendarExport' | 'backupSchedules' | 'savedSchedules';
+export type FeatureId =
+  | 'calendarExport'
+  | 'backupSchedules'
+  | 'savedSchedules'
+  | 'finalsBuilder';
 
 export interface FeatureMeta {
   id: FeatureId;
@@ -37,6 +41,13 @@ export const FEATURES: Record<FeatureId, FeatureMeta> = {
       'Save a schedule to your account and reopen it later — adjust classes or commitments, then re-export the updated calendar.',
     minPlan: 'pro',
   },
+  finalsBuilder: {
+    id: 'finalsBuilder',
+    name: 'Finals schedule builder',
+    description:
+      'Turn a saved schedule into a finals study plan — study time weighted by how comfortable you are with each class, placed around your real exam times.',
+    minPlan: 'pro',
+  },
 };
 
 const PLAN_RANK: Record<Plan, number> = { free: 0, pro: 1 };
@@ -56,8 +67,8 @@ export const PRO_PLAN = {
   tagline: 'Everything in Free, plus the tools to lock in your perfect term.',
   perks: [
     FEATURES.calendarExport.name,
-    FEATURES.backupSchedules.name,
     FEATURES.savedSchedules.name,
-    'New Pro features as they ship',
+    FEATURES.backupSchedules.name,
+    FEATURES.finalsBuilder.name,
   ],
 };

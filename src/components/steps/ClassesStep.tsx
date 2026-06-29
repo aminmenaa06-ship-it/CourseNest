@@ -33,6 +33,7 @@ export default function ClassesStep() {
       studyHoursAuto: auto,
       color: classColor(classes.length),
       source: filename,
+      finalExam: parsed.finalExam ?? undefined,
     };
     dispatch({ type: 'addClass', item });
   }

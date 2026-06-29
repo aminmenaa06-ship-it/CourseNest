@@ -18,6 +18,8 @@ Course Description:
 This course introduces the foundations of computation. Students should expect
 to spend 8-10 hours per week outside of class on readings, labs, and projects.
 
+Final Exam: Monday, December 14, 2026, 8:00 - 11:00 AM, Wheeler Hall 150
+
 Grading: Projects 40%, Exams 45%, Participation 15%.
 `;
 
@@ -42,6 +44,7 @@ export function demoClasses(): ClassItem[] {
         { day: 4, start: 600, end: 650, location: 'Wheeler 150' },
         { day: 3, start: 840, end: 900, location: 'Soda 320' },
       ],
+      finalExam: { date: '2026-12-14', start: 480, end: 660 },
     },
     {
       id: id('class'),
@@ -56,6 +59,7 @@ export function demoClasses(): ClassItem[] {
         { day: 1, start: 660, end: 740, location: 'Evans 10' },
         { day: 3, start: 660, end: 740, location: 'Evans 10' },
       ],
+      finalExam: { date: '2026-12-16', start: 780, end: 960 },
     },
     {
       id: id('class'),

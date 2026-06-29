@@ -1,4 +1,4 @@
-import type { DayIndex, TimeBlock } from '../types';
+import type { DayIndex, FinalExamInfo, TimeBlock } from '../types';
 
 export interface ParsedSyllabus {
   name: string | null;
@@ -7,12 +7,15 @@ export interface ParsedSyllabus {
   meetings: TimeBlock[];
   /** Explicit "expected hours per week outside class" if the syllabus states it. */
   explicitStudyHours: number | null;
+  /** Final-exam date/time if stated in the syllabus. */
+  finalExam: FinalExamInfo | null;
   /** Which fields we were confident about, for UI hints. */
   confidence: {
     name: boolean;
     units: boolean;
     meetings: boolean;
     studyHours: boolean;
+    finalExam: boolean;
   };
 }
 
@@ -276,6 +279,76 @@ function extractMeetings(text: string): TimeBlock[] {
   return blocks.sort((a, b) => a.day - b.day || a.start - b.start);
 }
 
+// ---- Final exam ---------------------------------------------------------
+
+const MONTHS: Record<string, number> = {
+  jan: 0, feb: 1, mar: 2, apr: 3, may: 4, jun: 5,
+  jul: 6, aug: 7, sep: 8, oct: 9, nov: 10, dec: 11,
+};
+
+function isoDate(month0: number, day: number, year: number): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${year}-${p(month0 + 1)}-${p(day)}`;
+}
+
+const FINAL_RE = /final\s*(?:exam|assessment)|exam.*\bfinal\b|\bfinal\b\s*[:\-]/i;
+const NOT_FINAL_RE = /final\s*(?:grade|project|paper|essay|presentation|draft|portfolio|report)/i;
+
+function extractFinalExam(text: string): FinalExamInfo | null {
+  const lines = text.split('\n');
+  let context = '';
+
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (FINAL_RE.test(l) && !NOT_FINAL_RE.test(l)) {
+      const merged = `${l} ${lines[i + 1] ?? ''}`;
+      if (/\d/.test(merged)) {
+        context = merged;
+        break;
+      }
+      if (!context) context = merged;
+    }
+  }
+  if (!context || !/\d/.test(context)) return null;
+
+  let month0: number | null = null;
+  let day: number | null = null;
+  let year: number | null = null;
+
+  const named = context.match(
+    /\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s*(\d{4}))?/i,
+  );
+  if (named) {
+    month0 = MONTHS[named[1].slice(0, 3).toLowerCase()];
+    day = parseInt(named[2], 10);
+    year = named[3] ? parseInt(named[3], 10) : null;
+  } else {
+    const numeric = context.match(/\b(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?\b/);
+    if (numeric) {
+      month0 = parseInt(numeric[1], 10) - 1;
+      day = parseInt(numeric[2], 10);
+      if (numeric[3]) {
+        year = numeric[3].length === 2 ? 2000 + parseInt(numeric[3], 10) : parseInt(numeric[3], 10);
+      }
+    }
+  }
+
+  if (month0 === null || day === null || month0 < 0 || month0 > 11 || day < 1 || day > 31) {
+    return null;
+  }
+
+  if (year === null) {
+    const now = new Date();
+    year = now.getFullYear();
+    const candidate = new Date(year, month0, day);
+    // If the date already passed comfortably, the syllabus likely means next year.
+    if (candidate.getTime() < now.getTime() - 7 * 24 * 3600 * 1000) year += 1;
+  }
+
+  const range = parseTimeRange(context);
+  return { date: isoDate(month0, day, year), start: range?.start, end: range?.end };
+}
+
 // ---- Public API --------------------------------------------------------
 
 export function parseSyllabus(text: string): ParsedSyllabus {
@@ -284,6 +357,7 @@ export function parseSyllabus(text: string): ParsedSyllabus {
   const units = extractUnits(text);
   const meetings = extractMeetings(text);
   const explicitStudyHours = extractExplicitStudyHours(text);
+  const finalExam = extractFinalExam(text);
 
   return {
     name,
@@ -291,11 +365,13 @@ export function parseSyllabus(text: string): ParsedSyllabus {
     units,
     meetings,
     explicitStudyHours,
+    finalExam,
     confidence: {
       name: !!name,
       units: units !== null,
       meetings: meetings.length > 0,
       studyHours: explicitStudyHours !== null,
+      finalExam: finalExam !== null && !!finalExam.date,
     },
   };
 }

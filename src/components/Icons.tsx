@@ -72,3 +72,17 @@ export const RefreshIcon = ({ size = 18, className }: P) => (
     <path d="M21 3v5h-5" />
   </svg>
 );
+
+export const LockIcon = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <rect x="4.5" y="10.5" width="15" height="10" rx="2" />
+    <path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+  </svg>
+);
+
+export const PlusCircle = ({ size = 18, className }: P) => (
+  <svg {...base(size, className)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 8.5v7M8.5 12h7" />
+  </svg>
+);

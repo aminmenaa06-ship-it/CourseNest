@@ -7,6 +7,7 @@ import {
   type ReactNode,
 } from 'react';
 import type {
+  AppSnapshot,
   AppState,
   ClassItem,
   Commitment,
@@ -57,6 +58,7 @@ type Action =
   | { type: 'enter'; step?: number }
   | { type: 'goLanding' }
   | { type: 'loadDemo' }
+  | { type: 'loadSnapshot'; snapshot: AppSnapshot; step?: number }
   | { type: 'reset' };
 
 function reducer(state: AppState, action: Action): AppState {
@@ -103,6 +105,13 @@ function reducer(state: AppState, action: Action): AppState {
         schoolId: 'uc-berkeley',
         classes: demoClasses(),
         commitments: demoCommitments(),
+      };
+    case 'loadSnapshot':
+      return {
+        ...state,
+        ...action.snapshot,
+        entered: true,
+        step: action.step ?? 4,
       };
     case 'reset':
       return initialState();

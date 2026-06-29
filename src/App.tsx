@@ -7,6 +7,8 @@ import CommitmentsStep from './components/steps/CommitmentsStep';
 import PreferencesStep from './components/steps/PreferencesStep';
 import ScheduleStep from './components/steps/ScheduleStep';
 import { ArrowLeft, ArrowRight, RefreshIcon } from './components/Icons';
+import { usePlan } from './features/PlanContext';
+import ProBadge from './features/ProBadge';
 
 const STEPS = [
   { label: 'School', icon: '🏫' },
@@ -18,6 +20,7 @@ const STEPS = [
 
 export default function App() {
   const { state, dispatch, resetAll } = useApp();
+  const { isPro, promptUpgrade, downgrade } = usePlan();
   const step = state.step;
 
   const go = (i: number) =>
@@ -58,6 +61,21 @@ export default function App() {
             </div>
           </button>
           <div className="flex items-center gap-2">
+            {isPro ? (
+              <button
+                onClick={() => {
+                  if (confirm('Switch back to the Free plan? (for testing)')) downgrade();
+                }}
+                className="inline-flex items-center gap-1.5 text-sm"
+                title="You're on CourseNest Pro — click to switch back to Free"
+              >
+                <ProBadge />
+              </button>
+            ) : (
+              <button onClick={() => promptUpgrade()} className="btn btn-ghost !py-1.5 text-sm">
+                Upgrade to Pro
+              </button>
+            )}
             <button
               onClick={() => {
                 dispatch({ type: 'loadDemo' });

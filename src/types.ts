@@ -135,3 +135,9 @@ export interface AppState {
   /** False while the landing/intro page is showing; true once the user begins setup. */
   entered: boolean;
 }
+
+/** The portion of state that fully describes a schedule — saved & restored as a unit. */
+export type AppSnapshot = Pick<
+  AppState,
+  'schoolId' | 'customStudyHoursPerUnit' | 'classes' | 'commitments' | 'prefs'
+>;

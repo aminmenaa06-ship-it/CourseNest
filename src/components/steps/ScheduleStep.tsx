@@ -1,20 +1,83 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../../state/AppContext';
 import { generateSchedule } from '../../lib/scheduler';
 import { buildICS, downloadICS } from '../../lib/ics';
+import type { GeneratedSchedule } from '../../types';
 import CalendarGrid from '../CalendarGrid';
+import BackupSchedules, { type BackupSummary } from '../BackupSchedules';
+import SavedSchedules from '../SavedSchedules';
 import { fmtHours } from '../../lib/time';
 import { STUDY_COLOR } from '../../lib/colors';
-import { CalendarIcon, DownloadIcon } from '../Icons';
+import { CalendarIcon, DownloadIcon, LockIcon } from '../Icons';
+import { usePlan } from '../../features/PlanContext';
+import { ProGate } from '../../features/ProGate';
+import ProBadge from '../../features/ProBadge';
+import {
+  BACKUP_STRATEGIES,
+  strategyByKey,
+  type StrategyKey,
+} from '../../features/backupStrategies';
+
+const BACKUPS_KEY = 'coursenest:backups';
+
+function loadBackupKeys(): StrategyKey[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(BACKUPS_KEY) || '[]');
+    return Array.isArray(raw) ? (raw as StrategyKey[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function studyPctOf(sch: GeneratedSchedule): number {
+  const { requiredStudyMin, scheduledStudyMin } = sch.summary;
+  return requiredStudyMin > 0
+    ? Math.min(100, Math.round((scheduledStudyMin / requiredStudyMin) * 100))
+    : 100;
+}
 
 export default function ScheduleStep() {
   const { state } = useApp();
   const { classes, commitments, prefs } = state;
+  const { can, promptUpgrade } = usePlan();
 
-  const schedule = useMemo(
+  const canExport = can('calendarExport');
+  const canBackups = can('backupSchedules');
+
+  const [backupKeys, setBackupKeys] = useState<StrategyKey[]>(loadBackupKeys);
+  const [activeKey, setActiveKey] = useState<StrategyKey | null>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(BACKUPS_KEY, JSON.stringify(backupKeys));
+    } catch {
+      /* ignore */
+    }
+  }, [backupKeys]);
+
+  const primary = useMemo(
     () => generateSchedule(classes, commitments, prefs),
     [classes, commitments, prefs],
   );
+
+  const backups = useMemo(
+    () =>
+      backupKeys.map((key) => {
+        const strat = strategyByKey(key);
+        return {
+          key,
+          label: strat.label,
+          description: strat.description,
+          schedule: generateSchedule(classes, commitments, { ...prefs, ...strat.patch }),
+        };
+      }),
+    [backupKeys, classes, commitments, prefs],
+  );
+
+  // A downgraded user shouldn't be stuck previewing a (now locked) backup.
+  const effectiveKey = canBackups ? activeKey : null;
+  const activeEntry = effectiveKey ? backups.find((b) => b.key === effectiveKey) : null;
+  const active = activeEntry?.schedule ?? primary;
 
   const [opts, setOpts] = useState({
     includeClasses: true,
@@ -38,20 +101,29 @@ export default function ScheduleStep() {
     );
   }
 
-  const s = schedule.summary;
-  const studyPct =
-    s.requiredStudyMin > 0
-      ? Math.min(100, Math.round((s.scheduledStudyMin / s.requiredStudyMin) * 100))
-      : 100;
+  const s = active.summary;
+  const studyPct = studyPctOf(active);
 
   function handleExport() {
-    const ics = buildICS(schedule, prefs, opts);
+    if (!canExport) {
+      promptUpgrade('calendarExport');
+      return;
+    }
+    const ics = buildICS(active, prefs, opts);
     downloadICS('coursenest-schedule.ics', ics);
   }
 
-  // Visible time window: pad around the day a touch.
   const dayStart = Math.max(0, prefs.wake - 30);
   const dayEnd = Math.min(24 * 60, prefs.sleep + 30);
+
+  const backupSummaries: BackupSummary[] = backups.map((b) => ({
+    key: b.key,
+    label: b.label,
+    description: b.description,
+    studyPct: studyPctOf(b.schedule),
+    freeHrs: fmtHours(b.schedule.summary.freeMin),
+  }));
+  const available = BACKUP_STRATEGIES.filter((st) => !backupKeys.includes(st.key));
 
   return (
     <div className="animate-in flex flex-col gap-6">
@@ -65,7 +137,7 @@ export default function ScheduleStep() {
         </div>
       </header>
 
-      {/* Summary stat cards */}
+      {/* Summary stat cards (reflect whichever schedule is showing) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat
           label="Study scheduled"
@@ -73,11 +145,7 @@ export default function ScheduleStep() {
           sub={`of ${fmtHours(s.requiredStudyMin)} recommended`}
           pct={studyPct}
         />
-        <Stat
-          label="Free time / week"
-          value={fmtHours(s.freeMin)}
-          sub={`goal ${prefs.freeTimePerWeek}h`}
-        />
+        <Stat label="Free time / week" value={fmtHours(s.freeMin)} sub={`goal ${prefs.freeTimePerWeek}h`} />
         <Stat
           label="Classes"
           value={String(classes.length)}
@@ -86,7 +154,6 @@ export default function ScheduleStep() {
         <Stat label="Commitments" value={String(commitments.length)} sub="work, gym, clubs…" />
       </div>
 
-      {/* Warnings */}
       {s.warnings.length > 0 && (
         <div className="card p-4 border-l-[3px] border-l-[var(--color-ink)]">
           <div className="font-semibold text-[var(--color-ink)] mb-1.5 text-sm uppercase tracking-[0.06em]">
@@ -100,60 +167,108 @@ export default function ScheduleStep() {
         </div>
       )}
 
-      <CalendarGrid schedule={schedule} dayStart={dayStart} dayEnd={dayEnd} />
+      {activeEntry && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--color-ink)] bg-[var(--color-surface-2)] px-4 py-2.5">
+          <span className="text-sm">
+            Previewing backup: <strong>{activeEntry.label}</strong>
+          </span>
+          <button
+            onClick={() => setActiveKey(null)}
+            className="text-sm text-[var(--color-ink)] underline underline-offset-2 hover:opacity-70"
+          >
+            Back to primary
+          </button>
+        </div>
+      )}
+
+      <CalendarGrid schedule={active} dayStart={dayStart} dayEnd={dayEnd} />
 
       <Legend classes={classes} />
 
-      {/* Export */}
+      {/* Saved schedules — Pro */}
+      <ProGate feature="savedSchedules">
+        <SavedSchedules />
+      </ProGate>
+
+      {/* Backup schedule builder — Pro */}
+      <ProGate feature="backupSchedules">
+        <BackupSchedules
+          primary={{ studyPct: studyPctOf(primary), freeHrs: fmtHours(primary.summary.freeMin) }}
+          backups={backupSummaries}
+          available={available}
+          activeKey={effectiveKey}
+          onSelect={setActiveKey}
+          onAdd={(key) => setBackupKeys((k) => [...k, key])}
+          onRemove={(key) =>
+            setBackupKeys((k) => {
+              if (activeKey === key) setActiveKey(null);
+              return k.filter((x) => x !== key);
+            })
+          }
+        />
+      </ProGate>
+
+      {/* Calendar export — Pro */}
       <div className="card p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-md">
             <h3 className="text-lg font-bold flex items-center gap-2">
               <CalendarIcon size={20} /> Add to Google or Apple Calendar
+              <ProBadge tone="outline" />
             </h3>
             <p className="text-sm text-[var(--color-muted)] mt-1">
               Download a <code className="text-[var(--color-ink)]">.ics</code> file — the universal
               calendar format. It imports into <strong>both</strong> Google Calendar and Apple
               Calendar, with each event repeating weekly until your term ends.
             </p>
-            <div className="text-xs text-[var(--color-muted)] mt-3 space-y-1">
-              <p>
-                <strong className="text-[var(--color-ink)]">Google:</strong> Settings → Import &amp;
-                export → select the file.
-              </p>
-              <p>
-                <strong className="text-[var(--color-ink)]">Apple:</strong> open the file, or
-                Calendar → File → Import.
-              </p>
-            </div>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <span className="label !mb-0">Include in export</span>
-            {(
-              [
-                ['includeClasses', 'Classes'],
-                ['includeCommitments', 'Commitments'],
-                ['includeStudy', 'Study blocks'],
-                ['includeMeals', 'Meals'],
-                ['includeFree', 'Free-time blocks'],
-              ] as const
-            ).map(([key, label]) => (
-              <label key={key} className="flex items-center gap-2 text-sm cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={opts[key]}
-                  onChange={(e) => setOpts((o) => ({ ...o, [key]: e.target.checked }))}
-                />
-                {label}
-              </label>
-            ))}
-          </div>
+          {canExport && (
+            <div className="flex flex-col gap-2">
+              <span className="label !mb-0">Include in export</span>
+              {(
+                [
+                  ['includeClasses', 'Classes'],
+                  ['includeCommitments', 'Commitments'],
+                  ['includeStudy', 'Study blocks'],
+                  ['includeMeals', 'Meals'],
+                  ['includeFree', 'Free-time blocks'],
+                ] as const
+              ).map(([key, label]) => (
+                <label key={key} className="flex items-center gap-2 text-sm cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={opts[key]}
+                    onChange={(e) => setOpts((o) => ({ ...o, [key]: e.target.checked }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          )}
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button onClick={handleExport} className="btn btn-primary">
-            <DownloadIcon size={16} /> Download .ics file
-          </button>
+
+        <div className="mt-4">
+          {canExport ? (
+            <button onClick={handleExport} className="btn btn-primary">
+              <DownloadIcon size={16} /> Download .ics file
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-dashed border-[var(--color-border-strong)] bg-[var(--color-surface-2)] p-3.5">
+              <span className="h-9 w-9 rounded-lg grid place-items-center bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-ink)] shrink-0">
+                <LockIcon size={18} />
+              </span>
+              <div className="flex-1 min-w-[12rem]">
+                <div className="text-sm font-semibold">Calendar export is a Pro feature</div>
+                <div className="text-xs text-[var(--color-muted)]">
+                  Your schedule is ready to view — upgrade to download and sync it.
+                </div>
+              </div>
+              <button onClick={() => promptUpgrade('calendarExport')} className="btn btn-primary">
+                Upgrade to Pro
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -180,10 +295,7 @@ function Stat({
       <div className="text-xs text-[var(--color-muted)] mt-0.5">{sub}</div>
       {pct !== undefined && (
         <div className="h-1 rounded-full bg-[var(--color-surface-2)] mt-2.5 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-[var(--color-ink)]"
-            style={{ width: `${pct}%` }}
-          />
+          <div className="h-full rounded-full bg-[var(--color-ink)]" style={{ width: `${pct}%` }} />
         </div>
       )}
     </div>
